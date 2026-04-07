@@ -15,7 +15,7 @@ import { useFlowStore } from './store/useFlowStore';
 import { useProfileStore } from './store/useProfileStore';
 import { useAuthStore } from './store/useAuthStore';
 import { TEAM, LOUSA_POS } from './constants';
-import { callAgentLLM, PO_REFINE_PROMPT, type SDDDocument } from './engine/llm';
+import { callAgentLLM, PO_REFINE_PROMPT, FILE_PLAN_PROMPT, type SDDDocument } from './engine/llm';
 import { buildSquadSummary, parsePOResponse, validateSDD, fillPlaceholders, renderSddMarkdown } from './engine/sdd';
 import { delay } from './engine/orchestration';
 import { subscribeFlow } from './engine/flow-sse';
@@ -726,7 +726,7 @@ export default function App() {
           agentId, agentRole: deliveryStep.role, modelId, apiKey,
           story, previousSteps: prevResults,
           workspaceContext: combinedCtx || undefined,
-          customPrompt: (await import('./engine/llm')).FILE_PLAN_PROMPT,
+          customPrompt: FILE_PLAN_PROMPT,
         });
 
         // Parse file plan JSON
