@@ -776,8 +776,16 @@ export default function App() {
           });
 
           const blocks = extractCodeBlocks(fileCode);
-          const selectedBlock = blocks[0];
-          if (!selectedBlock) continue;
+          let selectedBlock = blocks[0];
+
+          // If LLM didn't wrap code in markdown blocks, treat entire output as code
+          if (!selectedBlock && fileCode.trim()) {
+            selectedBlock = { lang: fp.path.split('.').pop() || 'txt', code: fileCode.trim() };
+          }
+          if (!selectedBlock) {
+            addLog({ text: `${deliveryStep.role}: ${fp.path} — LLM nao gerou codigo, pulando`, tag: { label: 'alert', type: 'alert' } });
+            continue;
+          }
 
           // Avoid path conflicts
           let filePath = fp.path;
@@ -794,7 +802,9 @@ export default function App() {
           clearBubble(agentId);
           showBubble(agentId, `Aprovar ${filePath.split('/').pop()}?`, false);
 
-          updateStep(flowId, deliveryStepId, { status: 'approval', code: fileCode, filePath });
+          // Show only the extracted code in approval modal, not raw LLM markdown
+          const codeForApproval = '```' + selectedBlock.lang + '\n' + selectedBlock.code + '\n```';
+          updateStep(flowId, deliveryStepId, { status: 'approval', code: codeForApproval, filePath });
           const approved = await waitForApproval();
           clearBubble(agentId);
 
