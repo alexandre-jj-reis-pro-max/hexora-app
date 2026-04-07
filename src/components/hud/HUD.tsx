@@ -99,7 +99,7 @@ export default function HUD() {
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.borderColor = '#7c3aed';
-            e.currentTarget.style.color = '#a78bfa';
+            e.currentTarget.style.color = '#7c3aed';
             e.currentTarget.style.background = 'rgba(124,58,237,.08)';
           }}
           onMouseLeave={(e) => {
@@ -125,7 +125,7 @@ export default function HUD() {
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.background = 'rgba(124,58,237,.4)';
-            e.currentTarget.style.borderColor = '#a78bfa';
+            e.currentTarget.style.borderColor = '#7c3aed';
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.background = 'rgba(124,58,237,.2)';

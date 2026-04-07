@@ -9,7 +9,7 @@ const TAG_STYLES: Record<string, { bg: string; color: string; border: string }> 
   sync:   { bg: 'rgba(251,146,60,.1)',  color: '#fb923c', border: 'rgba(251,146,60,.3)' },
   deploy: { bg: 'rgba(192,132,252,.1)', color: '#c084fc', border: 'rgba(192,132,252,.3)' },
   orch:   { bg: 'rgba(251,191,36,.1)',  color: '#fbbf24', border: 'rgba(251,191,36,.3)' },
-  agent:  { bg: 'rgba(139,92,246,.1)',  color: '#a78bfa', border: 'rgba(139,92,246,.3)' },
+  agent:  { bg: 'rgba(139,92,246,.1)',  color: '#7c3aed', border: 'rgba(139,92,246,.3)' },
   done:   { bg: 'rgba(74,222,128,.1)',  color: '#4ade80', border: 'rgba(74,222,128,.3)' },
 };
 
@@ -41,7 +41,7 @@ export default function Log() {
           left: 0,
           right: 260,
           height: 130,
-          background: '#0c0720',
+          background: '#0d0720',
           borderTop: '1px solid #2a1050',
           zIndex: 300,
           display: 'flex',
@@ -154,6 +154,28 @@ export default function Log() {
                 padding: '8px 12px',
               }}
             >
+              {/* Token summary badge */}
+              {traces.length > 0 && (
+                <div style={{
+                  flexShrink: 0, width: 100, display: 'flex', flexDirection: 'column',
+                  justifyContent: 'center', alignItems: 'center', gap: 4,
+                  background: 'rgba(124,58,237,.06)', border: '1px solid #1a0d35',
+                  borderRadius: 6, padding: '6px 8px',
+                }}>
+                  <div className="font-pixel" style={{ fontSize: '4.5px', color: '#6d28d9', letterSpacing: '0.1em' }}>TOKENS</div>
+                  <div className="font-vt" style={{ fontSize: 18, color: '#a78bfa', lineHeight: 1 }}>
+                    {traces.reduce((s, t) => s + (t.tokensInput ?? 0) + (t.tokensOutput ?? 0), 0).toLocaleString()}
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <span style={{ fontFamily: 'monospace', fontSize: '5.5px', color: '#4b5563' }}>
+                      IN {traces.reduce((s, t) => s + (t.tokensInput ?? 0), 0).toLocaleString()}
+                    </span>
+                    <span style={{ fontFamily: 'monospace', fontSize: '5.5px', color: '#4b5563' }}>
+                      OUT {traces.reduce((s, t) => s + (t.tokensOutput ?? 0), 0).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              )}
               {traces.length === 0 ? (
                 <div className="font-vt flex items-center" style={{ fontSize: 13, color: '#374151' }}>
                   Nenhuma chamada LLM ainda. Execute uma história para ver os requests.
@@ -186,7 +208,7 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
         fontFamily: 'monospace', fontSize: '6px', letterSpacing: '0.14em',
         padding: '8px 14px', background: 'transparent', border: 'none',
         borderBottom: active ? '2px solid #7c3aed' : '2px solid transparent',
-        color: active ? '#a78bfa' : '#4b5563',
+        color: active ? '#7c3aed' : '#4b5563',
         cursor: 'pointer', display: 'flex', alignItems: 'center',
         transition: 'color .12s',
         flexShrink: 0,
@@ -363,7 +385,7 @@ function TraceModal({ trace, onClose }: { trace: LLMTrace; onClose: () => void }
               fontSize: 20, width: 28, height: 28, cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#7c3aed'; e.currentTarget.style.color = '#a78bfa'; }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#7c3aed'; e.currentTarget.style.color = '#7c3aed'; }}
             onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#2a1050'; e.currentTarget.style.color = '#4b5563'; }}
           >
             ×

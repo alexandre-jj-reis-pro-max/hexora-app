@@ -112,9 +112,10 @@ export default function ProfilePanel({ className }: ProfilePanelProps) {
             GITHUB
           </div>
           <GitHubKeyRow value={githubToken} onChange={setGithubToken} />
+          <GitHubApiUrlField />
           <div className="font-pixel" style={{ fontSize: '5px', color: '#374151', marginTop: 8, letterSpacing: '0.06em', lineHeight: 1.6 }}>
-            Personal Access Token com scopes: <span style={{ color: '#4b5563' }}>repo, workflow</span>.
-            Configure o repositório alvo em cada Workspace.
+            PAT com scopes: <span style={{ color: '#4b5563' }}>repo, workflow</span>.
+            Para GitHub Enterprise, altere a API URL acima.
           </div>
         </div>
 
@@ -205,11 +206,51 @@ function StatBox({ label, value, border }: { label: string; value: number; borde
         borderLeft: border ? '1px solid #1a0d35' : 'none',
       }}
     >
-      <div className="font-pixel" style={{ fontSize: '18px', color: '#a78bfa', lineHeight: 1, marginBottom: 4 }}>
+      <div className="font-pixel" style={{ fontSize: '18px', color: '#7c3aed', lineHeight: 1, marginBottom: 4 }}>
         {value}
       </div>
       <div className="font-pixel" style={{ fontSize: '5px', color: '#4b5563', letterSpacing: '0.08em' }}>
         {label}
+      </div>
+    </div>
+  );
+}
+
+function GitHubApiUrlField() {
+  const [url, setUrl] = useState('https://api.github.com');
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    profileApi.getGithubApiUrl().then((d) => setUrl(d.url)).catch(() => {});
+  }, []);
+
+  const save = async () => {
+    try {
+      await profileApi.setGithubApiUrl(url.trim() || 'https://api.github.com');
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch { /* silent */ }
+  };
+
+  return (
+    <div style={{ marginTop: 8 }}>
+      <div className="font-pixel" style={{ fontSize: '5px', color: '#4b5563', letterSpacing: '0.08em', marginBottom: 3 }}>
+        API URL (Enterprise: https://github.empresa.com/api/v3)
+      </div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <input
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://api.github.com"
+          className="font-vt"
+          style={{
+            flex: 1, background: 'rgba(0,0,0,.3)', border: '1px solid #2a1050',
+            borderRadius: 4, color: '#9ca3af', fontSize: 12, padding: '4px 8px', outline: 'none',
+          }}
+          onFocus={(e) => (e.target.style.borderColor = '#7c3aed')}
+          onBlur={(e) => { save(); e.target.style.borderColor = '#2a1050'; }}
+        />
+        {saved && <span style={{ fontFamily: 'monospace', fontSize: '6px', color: '#4ade80', alignSelf: 'center' }}>OK</span>}
       </div>
     </div>
   );
@@ -230,7 +271,7 @@ function GitHubKeyRow({ value, onChange }: { value: string; onChange: (v: string
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
         <span style={{ fontSize: 14 }}>🐙</span>
-        <span className="font-pixel" style={{ fontSize: '5.5px', color: hasKey ? '#a78bfa' : '#4b5563', letterSpacing: '0.08em', flex: 1 }}>
+        <span className="font-pixel" style={{ fontSize: '5.5px', color: hasKey ? '#7c3aed' : '#4b5563', letterSpacing: '0.08em', flex: 1 }}>
           GitHub PAT
         </span>
         {hasKey && (
@@ -415,7 +456,7 @@ function ProxySection({ config, onChange }: {
             padding: '7px',
             background: 'rgba(124,58,237,.12)',
             border: '1px solid #2a1050',
-            color: saved ? '#4ade80' : '#a78bfa',
+            color: saved ? '#4ade80' : '#7c3aed',
             fontSize: '5.5px',
             letterSpacing: '0.08em',
           }}
@@ -458,7 +499,7 @@ function LLMKeyRow({ provider, value, onChange }: {
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
         <span style={{ fontSize: 12 }}>{provider.logo}</span>
-        <span className="font-pixel" style={{ fontSize: '5.5px', color: hasKey ? '#a78bfa' : '#4b5563', letterSpacing: '0.08em', flex: 1 }}>
+        <span className="font-pixel" style={{ fontSize: '5.5px', color: hasKey ? '#7c3aed' : '#4b5563', letterSpacing: '0.08em', flex: 1 }}>
           {provider.name}
         </span>
         {hasKey && (

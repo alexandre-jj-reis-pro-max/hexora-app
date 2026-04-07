@@ -62,7 +62,7 @@ export default function WorkspacePanel({ className }: WorkspacePanelProps) {
         bottom: 110,
         left: 0,
         width: 420,
-        background: '#0c0720',
+        background: '#0d0720',
         borderRight: '1px solid #2a1050',
         transform,
         transition: 'transform .25s cubic-bezier(.4,0,.2,1)',
@@ -76,7 +76,7 @@ export default function WorkspacePanel({ className }: WorkspacePanelProps) {
         style={{ borderBottom: '1px solid #1a0d35', background: 'rgba(124,58,237,.03)' }}
       >
         <div className="flex items-center justify-between" style={{ padding: '14px 18px 0' }}>
-          <h2 className="font-pixel" style={{ fontSize: '7px', color: '#a78bfa', letterSpacing: '0.1em' }}>
+          <h2 className="font-pixel" style={{ fontSize: '7px', color: '#7c3aed', letterSpacing: '0.1em' }}>
             ◫ WORKSPACES
           </h2>
           <button
@@ -92,7 +92,7 @@ export default function WorkspacePanel({ className }: WorkspacePanelProps) {
             onClick={() => togglePanel('ws')}
             onMouseEnter={(e) => {
               e.currentTarget.style.borderColor = '#4c1d95';
-              e.currentTarget.style.color = '#a78bfa';
+              e.currentTarget.style.color = '#7c3aed';
               e.currentTarget.style.background = 'rgba(124,58,237,.1)';
             }}
             onMouseLeave={(e) => {
@@ -116,7 +116,7 @@ export default function WorkspacePanel({ className }: WorkspacePanelProps) {
                 padding: '9px 16px',
                 fontSize: '5.5px',
                 letterSpacing: '0.07em',
-                color: wsTab === tab.id ? '#a78bfa' : '#4b5563',
+                color: wsTab === tab.id ? '#7c3aed' : '#4b5563',
                 background: 'transparent',
                 border: 'none',
                 borderBottom: `2px solid ${wsTab === tab.id ? '#7c3aed' : 'transparent'}`,
@@ -262,7 +262,7 @@ export default function WorkspacePanel({ className }: WorkspacePanelProps) {
                 />
                 <button
                   className="font-pixel cursor-pointer rounded-md transition-all flex-shrink-0"
-                  style={{ padding: '7px 12px', background: 'rgba(124,58,237,.15)', border: '1px solid rgba(124,58,237,.4)', color: '#a78bfa', fontSize: '5.5px', whiteSpace: 'nowrap' }}
+                  style={{ padding: '7px 12px', background: 'rgba(124,58,237,.15)', border: '1px solid rgba(124,58,237,.4)', color: '#7c3aed', fontSize: '5.5px', whiteSpace: 'nowrap' }}
                   onClick={() => { if (urlInput.trim()) { addUrl(activeId, urlInput); setUrlInput(''); } }}
                   onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(124,58,237,.3)')}
                   onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(124,58,237,.15)')}
@@ -416,7 +416,7 @@ function IconBtn({ children, onClick, danger }: { children: React.ReactNode; onC
       style={{ width: 26, height: 26, background: 'transparent', border: '1px solid #1a0d35', color: '#4b5563', fontSize: 12 }}
       onMouseEnter={(e) => {
         e.currentTarget.style.borderColor = danger ? '#7f1d1d' : '#7c3aed';
-        e.currentTarget.style.color = danger ? '#f87171' : '#a78bfa';
+        e.currentTarget.style.color = danger ? '#f87171' : '#7c3aed';
         e.currentTarget.style.background = danger ? 'rgba(248,113,113,.08)' : 'rgba(124,58,237,.08)';
       }}
       onMouseLeave={(e) => {

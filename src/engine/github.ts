@@ -6,12 +6,15 @@
  *  2. commitToBranch()  — cada agente commita seus arquivos na mesma branch
  *  3. openPR()          — abre o PR ao final com todo o contexto da equipe
  *
- * Autenticação via Personal Access Token (PAT) — scopes: repo, workflow
+ * All GitHub API calls are proxied through the Hexora backend so they
+ * go through the corporate proxy. No direct api.github.com calls.
  */
 
-const GH = 'https://api.github.com';
+import { getToken } from '../lib/api';
 
-// ── HTTP helper ───────────────────────────────────────────────────────────────
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+// ── HTTP helper (via backend proxy) ──────────────────────────────────────────
 
 async function ghFetch<T = unknown>(
   token: string,
@@ -19,21 +22,27 @@ async function ghFetch<T = unknown>(
   method: 'GET' | 'POST' | 'PUT' = 'GET',
   body?: unknown,
 ): Promise<T> {
-  const res = await fetch(`${GH}${path}`, {
-    method,
+  const jwt = getToken();
+  const res = await fetch(`${API_BASE}/github/proxy`, {
+    method: 'POST',
     headers: {
-      Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
-      Accept: 'application/vnd.github+json',
-      'X-GitHub-Api-Version': '2022-11-28',
+      ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}),
     },
-    body: body ? JSON.stringify(body) : undefined,
+    body: JSON.stringify({
+      path,
+      method,
+      body: body ?? null,
+      github_token: token,
+    }),
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ message: res.statusText }));
-    throw new Error((err as { message?: string }).message ?? res.statusText);
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error((err as { detail?: string }).detail ?? res.statusText);
   }
-  return res.json() as Promise<T>;
+  const result = await res.json();
+  if (result.error) throw new Error(result.error);
+  return result.data as T;
 }
 
 // ── Public types ──────────────────────────────────────────────────────────────

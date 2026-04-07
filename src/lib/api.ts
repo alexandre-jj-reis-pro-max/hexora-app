@@ -158,6 +158,15 @@ export const profileApi = {
       method: 'PUT',
       body: JSON.stringify({ url, user, password, skip_ssl: skipSsl }),
     }),
+
+  getGithubApiUrl: () =>
+    request<{ url: string }>('/profile/github-api-url'),
+
+  setGithubApiUrl: (url: string) =>
+    request<{ url: string }>('/profile/github-api-url', {
+      method: 'PUT',
+      body: JSON.stringify({ url }),
+    }),
 };
 
 // ── Flows ──────────────────────────────────────────────────────────────────────
@@ -176,6 +185,9 @@ export interface APIFlowStep {
   file_path?: string;
   spec_draft?: string;
   order: number;
+  tokens_input?: number;
+  tokens_output?: number;
+  llm_duration_ms?: number;
 }
 
 export interface APIFlow {
@@ -197,6 +209,8 @@ export interface FlowCreateParams {
   workspace_context?: string;
   agents_order?: string[];  // execution order defined by PO in SDD
   role_docs?: Record<string, string>;  // per-role docs: { "dev-back": "techDocs...", "qa": "testDocs..." }
+  custom_prompts?: Record<string, string>;  // per-agent custom system prompts from AgentCanvas
+  agent_workspace_ids?: Record<string, string[]>;  // per-agent workspace assignments: { "dev-back": ["ws1","ws2"] }
 }
 
 export const flowsApi = {
@@ -276,4 +290,10 @@ export const workspacesApi = {
       method: 'PUT',
       body: JSON.stringify({ stack }),
     }),
+
+  getKBContext: (id: string) =>
+    request<{ context: string }>(`/workspaces/${id}/kb-context`),
+
+  getFileContent: (wsId: string, filename: string) =>
+    request<{ name: string; content: string }>(`/workspaces/${wsId}/files/${encodeURIComponent(filename)}/content`),
 };

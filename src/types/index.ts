@@ -126,6 +126,9 @@ export interface FlowStep {
   specDraft?: string;      // spec gerado pelo PO aguardando aprovação
   infoRequest?: InfoQuestion[];   // perguntas aguardando resposta do usuário
   infoAnswers?: Record<string, string>;
+  tokensInput?: number;
+  tokensOutput?: number;
+  llmDurationMs?: number;
 }
 
 export interface LogEntry {

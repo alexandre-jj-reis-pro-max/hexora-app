@@ -48,7 +48,7 @@ export default function StatePanel() {
           right: 0,
           width: 260,
           bottom: 110,
-          background: '#0c0720',
+          background: '#0d0720',
           borderLeft: '1px solid #2a1050',
           zIndex: 200,
           display: 'flex',
@@ -251,7 +251,7 @@ function FlowCard({
             height: '100%', width: `${progress * 100}%`,
             background: waitingStep
               ? 'linear-gradient(90deg, #fb923c, #fbbf24)'
-              : 'linear-gradient(90deg, #7c3aed, #a78bfa)',
+              : 'linear-gradient(90deg, #7c3aed, #7c3aed)',
             transition: 'width .4s ease',
           }} />
         </div>
@@ -282,7 +282,7 @@ function StepRow({ step, onApprove, onInfoRequest }: { step: FlowStep; onApprove
 
   const color = {
     done:           '#4ade80',
-    active:         '#a78bfa',
+    active:         '#7c3aed',
     pending:        '#2a1050',
     error:          '#f87171',
     approval:       '#fb923c',

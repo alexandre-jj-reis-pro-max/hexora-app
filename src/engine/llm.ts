@@ -31,6 +31,8 @@ export interface LLMCallParams {
 
 export interface LLMResult {
   text: string;
+  tokensInput?: number;
+  tokensOutput?: number;
 }
 
 // ── System prompts por papel ─────────────────────────────────────────────────
@@ -519,7 +521,7 @@ async function callViaBackend(
 
   const data = await res.json();
   if (data.error) throw new Error(data.error);
-  return { text: data.text ?? '' };
+  return { text: data.text ?? '', tokensInput: data.tokens_input ?? 0, tokensOutput: data.tokens_output ?? 0 };
 }
 
 // ── Entry point ──────────────────────────────────────────────────────────────
@@ -546,7 +548,6 @@ export async function callAgentLLM(params: LLMCallParams): Promise<LLMResult> {
   const missingModel = !modelId || !modelId.includes(':');
   const provider     = missingModel ? 'config' : modelId.split(':')[0];
   const model        = missingModel ? '' : modelId.split(':').slice(1).join(':');
-  const isLocal      = provider === 'local';
 
   const traceId = addTrace({
     agentId,
@@ -566,36 +567,17 @@ export async function callAgentLLM(params: LLMCallParams): Promise<LLMResult> {
     return { text: `⚠ ${msg}` };
   }
 
-  // ── Chamada via backend (proxy) ou direta (fallback) ──────────────────────
-  console.group(`%c[HEXORA LLM] ${provider.toUpperCase()} → ${agentDef?.name ?? agentId}`, 'color:#a78bfa;font-weight:bold');
+  // ── Chamada via backend proxy (todas chamadas LLM passam pelo backend) ────
+  console.group(`%c[HEXORA LLM] ${provider.toUpperCase()} → ${agentDef?.name ?? agentId}`, 'color:#7c3aed;font-weight:bold');
   console.log('%cMODEL',  'color:#fbbf24', model);
-  console.log('%cROUTE',  'color:#38bdf8', API_BASE_URL ? 'backend proxy' : 'direct');
+  console.log('%cROUTE',  'color:#38bdf8', 'backend proxy');
 
   const t0 = Date.now();
   try {
-    let result: LLMResult;
-
-    if (API_BASE_URL) {
-      // ── Via backend proxy ─────────────────────────────────────────────
-      result = await callViaBackend(modelId, agentId, params.agentRole, apiKey, sys, user, maxTok);
-    } else {
-      // ── Fallback: chamada direta (legacy — keys no browser) ───────────
-      if (!apiKey && !isLocal) {
-        throw new Error(`Chave de API para "${provider}" não configurada.`);
-      }
-      switch (provider) {
-        case 'claude':  result = await callClaude(model, apiKey, sys, user, maxTok);  break;
-        case 'gpt4':    result = await callOpenAI(model, apiKey, sys, user, maxTok);  break;
-        case 'gemini':  result = await callGemini(model, apiKey, sys, user, maxTok);  break;
-        case 'mistral': result = await callMistral(model, apiKey, sys, user, maxTok); break;
-        case 'llama':   result = await callGroq(model, apiKey, sys, user, maxTok);    break;
-        case 'local':   result = await callLocal(model, apiKey, sys, user, maxTok);   break;
-        default:        throw new Error(`Provedor "${provider}" não suportado.`);
-      }
-    }
+    const result = await callViaBackend(modelId, agentId, params.agentRole, apiKey, sys, user, maxTok);
 
     const duration = Date.now() - t0;
-    updateTrace(traceId, { status: 'success', response: result.text, duration });
+    updateTrace(traceId, { status: 'success', response: result.text, duration, tokensInput: result.tokensInput, tokensOutput: result.tokensOutput });
     console.log(`%cRESPONSE %c(${duration}ms)`, 'color:#4ade80;font-weight:bold', 'color:#6b7280', result.text);
     console.groupEnd();
     return result;
@@ -609,164 +591,5 @@ export async function callAgentLLM(params: LLMCallParams): Promise<LLMResult> {
   }
 }
 
-// ── Anthropic Claude ─────────────────────────────────────────────────────────
-
-async function callClaude(model: string, key: string, sys: string, user: string, maxTokens = 350): Promise<LLMResult> {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'x-api-key': key,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: maxTokens,
-      system: sys,
-      messages: [{ role: 'user', content: user }],
-    }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: { message: res.statusText } }));
-    throw new Error(err?.error?.message ?? res.statusText);
-  }
-  const data = await res.json();
-  return { text: data.content?.[0]?.text ?? '' };
-}
-
-// ── OpenAI GPT-4o ────────────────────────────────────────────────────────────
-
-async function callOpenAI(model: string, key: string, sys: string, user: string, maxTokens = 350): Promise<LLMResult> {
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model,
-      max_tokens: maxTokens,
-      messages: [{ role: 'system', content: sys }, { role: 'user', content: user }],
-    }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: { message: res.statusText } }));
-    throw new Error(err?.error?.message ?? res.statusText);
-  }
-  const data = await res.json();
-  return { text: data.choices?.[0]?.message?.content ?? '' };
-}
-
-// ── Google Gemini ────────────────────────────────────────────────────────────
-
-async function callGemini(model: string, key: string, sys: string, user: string, maxTokens = 350): Promise<LLMResult> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: sys }] },
-      contents: [{ parts: [{ text: user }] }],
-      generationConfig: { maxOutputTokens: maxTokens, temperature: 0.7 },
-    }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: { message: res.statusText } }));
-    throw new Error(err?.error?.message ?? res.statusText);
-  }
-  const data = await res.json();
-  return { text: data.candidates?.[0]?.content?.parts?.[0]?.text ?? '' };
-}
-
-// ── Mistral AI ───────────────────────────────────────────────────────────────
-
-async function callMistral(model: string, key: string, sys: string, user: string, maxTokens = 350): Promise<LLMResult> {
-  const res = await fetch('https://api.mistral.ai/v1/chat/completions', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model,
-      max_tokens: maxTokens,
-      messages: [{ role: 'system', content: sys }, { role: 'user', content: user }],
-    }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: { message: res.statusText } }));
-    throw new Error(err?.error?.message ?? res.statusText);
-  }
-  const data = await res.json();
-  return { text: data.choices?.[0]?.message?.content ?? '' };
-}
-
-// ── Groq / Llama ─────────────────────────────────────────────────────────────
-
-async function callGroq(model: string, key: string, sys: string, user: string, maxTokens = 350): Promise<LLMResult> {
-  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model,
-      max_tokens: maxTokens,
-      messages: [{ role: 'system', content: sys }, { role: 'user', content: user }],
-    }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: { message: res.statusText } }));
-    throw new Error(err?.error?.message ?? res.statusText);
-  }
-  const data = await res.json();
-  return { text: data.choices?.[0]?.message?.content ?? '' };
-}
-
-// ── Local LLM (Ollama / vLLM / LM Studio — OpenAI-compatible API) ──────────
-//
-// Usage:
-//   1. docker run -d -p 11434:11434 ollama/ollama && ollama pull llama3.1
-//   2. Select provider "Local (Ollama)" in Hexora profile
-//   3. The "API key" field doubles as the base URL (default: http://localhost:11434)
-//
-// Supports any OpenAI-compatible local server:
-//   - Ollama:    http://localhost:11434/v1
-//   - vLLM:      http://localhost:8000/v1
-//   - LM Studio: http://localhost:1234/v1
-
-const LOCAL_DEFAULT_URL = 'http://localhost:11434';
-
-async function callLocal(model: string, baseUrlOrKey: string, sys: string, user: string, maxTokens = 350): Promise<LLMResult> {
-  // The "apiKey" field is used as base URL for local providers
-  const baseUrl = (baseUrlOrKey || LOCAL_DEFAULT_URL).replace(/\/+$/, '');
-  const messages = [{ role: 'system', content: sys }, { role: 'user', content: user }];
-
-  // Try OpenAI-compatible endpoint first (/v1), fallback to native Ollama (/api/chat)
-  const openaiUrl = `${baseUrl}/v1/chat/completions`;
-  try {
-    const res = await fetch(openaiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, max_tokens: maxTokens, messages }),
-    });
-    if (res.status !== 404) {
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: { message: res.statusText } }));
-        throw new Error(err?.error?.message ?? res.statusText);
-      }
-      const data = await res.json();
-      return { text: data.choices?.[0]?.message?.content ?? '' };
-    }
-  } catch (e) {
-    // If it's not a 404-related flow, rethrow
-    if (e instanceof TypeError) throw e; // network error
-  }
-
-  // Fallback: native Ollama /api/chat
-  const ollamaUrl = `${baseUrl}/api/chat`;
-  const res = await fetch(ollamaUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, messages, stream: false }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: { message: res.statusText } }));
-    throw new Error(err?.error?.message ?? res.statusText);
-  }
-  const data = await res.json();
-  return { text: data.message?.content ?? '' };
-}
+// All LLM calls go through the backend proxy — no direct external calls from browser.
 

@@ -91,7 +91,7 @@ const SPRITE_EXTRAS: Record<string, SpriteExtra> = {
     ctx.fillStyle = '#ec4899';
     ctx.fillRect(4, 2, 13, 3); ctx.fillRect(3, 3, 1, 2); ctx.fillRect(16, 3, 1, 2); ctx.fillRect(9, 0, 5, 3);
     ctx.fillStyle = '#f472b6'; ctx.fillRect(12, 14, 4, 4);
-    ctx.fillStyle = '#a78bfa'; ctx.fillRect(13, 15, 2, 1);
+    ctx.fillStyle = '#7c3aed'; ctx.fillRect(13, 15, 2, 1);
     ctx.fillStyle = '#34d399'; ctx.fillRect(13, 17, 2, 1);
     ctx.fillStyle = '#fbbf24'; ctx.fillRect(15, 16, 1, 1);
   },

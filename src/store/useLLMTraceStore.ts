@@ -12,6 +12,8 @@ export interface LLMTrace {
   model: string;
   status: TraceStatus;
   duration?: number;       // ms
+  tokensInput?: number;
+  tokensOutput?: number;
   systemPrompt?: string;
   userMessage?: string;
   response?: string;

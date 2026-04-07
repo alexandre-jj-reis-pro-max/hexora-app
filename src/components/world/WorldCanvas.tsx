@@ -744,7 +744,7 @@ function CommandMonitorOverlay({ x, y, w, h, bubble, onClick }: CommandMonitorOv
             position: 'absolute', top: -18, left: '50%',
             transform: 'translateX(-50%)',
             fontFamily: 'VT323, monospace', fontSize: '11px',
-            letterSpacing: '0.12em', color: '#a78bfa',
+            letterSpacing: '0.12em', color: '#7c3aed',
             textShadow: '0 1px 6px rgba(0,0,0,.8)',
             whiteSpace: 'nowrap',
           }}>
@@ -766,7 +766,7 @@ function CommandMonitorOverlay({ x, y, w, h, bubble, onClick }: CommandMonitorOv
             background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', color: '#f1f5f9',
             fontFamily: 'VT323, monospace', fontSize: '14px',
             padding: '8px 16px', borderRadius: '20px',
-            border: '1px solid #a78bfa', boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+            border: '1px solid #7c3aed', boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
             whiteSpace: 'nowrap', position: 'relative',
           }}>
             <div style={{

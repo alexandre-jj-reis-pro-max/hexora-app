@@ -130,11 +130,22 @@ export default function AgentCanvas() {
       if (rawUrl.includes('github.com') && rawUrl.includes('/blob/')) {
         rawUrl = rawUrl.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/');
       }
-      const res = await fetch(rawUrl);
+      // Route through backend proxy (corporate proxy support)
+      const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const token = localStorage.getItem('hexora_token') || '';
+      const res = await fetch(`${API_BASE}/github/fetch-url`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ url: rawUrl }),
+      });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const text = await res.text();
-      if (!text.trim()) throw new Error('Arquivo vazio');
-      updateSkills({ githubUrl: url, githubContent: text });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      if (!data.content?.trim()) throw new Error('Arquivo vazio');
+      updateSkills({ githubUrl: url, githubContent: data.content });
     } catch (err) {
       setSkillsError((err as Error).message);
     } finally {
@@ -229,7 +240,7 @@ export default function AgentCanvas() {
               fontSize: 20, width: 30, height: 30, cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#7c3aed'; e.currentTarget.style.color = '#a78bfa'; }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#7c3aed'; e.currentTarget.style.color = '#7c3aed'; }}
             onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#2a1050'; e.currentTarget.style.color = '#4b5563'; }}
           >
             ×
@@ -726,9 +737,9 @@ export default function AgentCanvas() {
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       {[
                         {
-                          name: 'GitHub MCP',
+                          name: 'GitHub Copilot MCP',
                           url: 'https://api.githubcopilot.com/mcp/',
-                          description: 'Criar branches, PRs, issues e pipelines via GitHub',
+                          description: 'Criar branches, PRs, issues e pipelines via GitHub Copilot',
                           icon: '🐙',
                           color: '#60a5fa',
                           note: 'Requer GitHub Copilot + PAT (scopes: repo, workflow)',
@@ -817,7 +828,7 @@ export default function AgentCanvas() {
                         fontFamily: 'monospace', fontSize: '8px', letterSpacing: '0.12em',
                         background: (!newMcp.name.trim() || !newMcp.url.trim()) ? 'rgba(42,16,80,.1)' : 'rgba(124,58,237,.22)',
                         border: '1px solid', borderColor: (!newMcp.name.trim() || !newMcp.url.trim()) ? '#1a0d35' : 'rgba(124,58,237,.5)',
-                        color: (!newMcp.name.trim() || !newMcp.url.trim()) ? '#374151' : '#a78bfa',
+                        color: (!newMcp.name.trim() || !newMcp.url.trim()) ? '#374151' : '#7c3aed',
                         borderRadius: 6, padding: '8px 16px',
                         cursor: (!newMcp.name.trim() || !newMcp.url.trim()) ? 'not-allowed' : 'pointer',
                       }}>

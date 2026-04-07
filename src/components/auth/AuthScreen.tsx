@@ -50,7 +50,7 @@ export default function AuthScreen() {
   return (
     <div
       className="fixed inset-0 flex items-center justify-center"
-      style={{ background: '#0c0720' }}
+      style={{ background: '#0d0720' }}
     >
       {/* Grid overlay */}
       <div

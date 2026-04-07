@@ -119,7 +119,7 @@ export default function WorkspaceSwitcher() {
             onClick={() => { setWsTab('list'); togglePanel('ws'); toggleWsDrop(true); }}
             onMouseEnter={(e) => {
               e.currentTarget.style.background = 'rgba(124,58,237,.08)';
-              e.currentTarget.style.color = '#a78bfa';
+              e.currentTarget.style.color = '#7c3aed';
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.background = 'transparent';

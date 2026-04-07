@@ -68,6 +68,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     if (!FIREBASE_ENABLED) throw new Error('Google login nao disponivel sem Firebase.');
     const { signInWithPopup, GoogleAuthProvider } = await import('firebase/auth');
     const { auth } = await import('../lib/firebase');
+    if (!auth) throw new Error('Firebase Auth nao inicializado.');
     const result = await signInWithPopup(auth, new GoogleAuthProvider());
     const u = result.user;
     set({
@@ -85,6 +86,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       // Firebase email/password + backend sync
       const { signInWithEmailAndPassword } = await import('firebase/auth');
       const { auth } = await import('../lib/firebase');
+      if (!auth) throw new Error('Firebase Auth nao inicializado.');
       const result = await signInWithEmailAndPassword(auth, email, password);
       const u = result.user;
       set({
@@ -126,6 +128,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       // Firebase register + backend sync
       const { createUserWithEmailAndPassword, updateProfile } = await import('firebase/auth');
       const { auth } = await import('../lib/firebase');
+      if (!auth) throw new Error('Firebase Auth nao inicializado.');
       const result = await createUserWithEmailAndPassword(auth, email, password);
       await updateProfile(result.user, { displayName: name });
       set({
@@ -166,7 +169,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       try {
         const { signOut } = await import('firebase/auth');
         const { auth } = await import('../lib/firebase');
-        await signOut(auth);
+        if (auth) await signOut(auth);
       } catch { /* ignore if firebase not loaded */ }
     }
     clearToken();
@@ -183,6 +186,7 @@ function initFirebaseAuth(set: (s: Partial<AuthState>) => void): () => void {
 
   import('firebase/auth').then(({ onAuthStateChanged }) => {
     import('../lib/firebase').then(({ auth }) => {
+      if (!auth) { set({ initializing: false }); return; }
       unsub = onAuthStateChanged(auth, async (firebaseUser) => {
         if (firebaseUser) {
           set({

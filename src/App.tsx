@@ -19,7 +19,7 @@ import { callAgentLLM, PO_REFINE_PROMPT, type SDDDocument } from './engine/llm';
 import { buildSquadSummary, parsePOResponse, validateSDD, fillPlaceholders, renderSddMarkdown } from './engine/sdd';
 import { delay } from './engine/orchestration';
 import { subscribeFlow } from './engine/flow-sse';
-import { flowsApi, type FlowCreateParams } from './lib/api';
+import { flowsApi, workspacesApi, type FlowCreateParams } from './lib/api';
 import { prepareBranch, commitToBranch, openPR, extractCodeBlocks, guessFilePath, guessTestFilePath, guessInfraFilePath, fileExistsInBranch, buildCodeContext, fetchExistingSDDs, fetchFileContent } from './engine/github';
 import { useWorkspaceStore } from './store/useWorkspaceStore';
 import { useProfileStore as useProfileStoreRaw } from './store/useProfileStore';
@@ -513,15 +513,28 @@ export default function App() {
       : story;
 
     // ── Build workspace context to send to backend ─────────────────────
-    const wsContext = buildWsContext(activeWs, [], workspaces);
+    // Fetch real KB context (file contents + URLs) from backend
+    let wsContext = buildWsContext(activeWs, [], workspaces);
+    if (wsId) {
+      try {
+        const kb = await workspacesApi.getKBContext(wsId);
+        if (kb.context) wsContext = wsContext ? `${wsContext}\n\n${kb.context}` : kb.context;
+      } catch { /* backend may not have KB yet — use basic context */ }
+    }
 
     const fullContext = [wsContext, repoContext].filter(Boolean).join('\n\n');
 
-    // Build per-agent skills docs (from agent-level config)
+    // Build per-agent skills docs, custom prompts, and workspace assignments
     const roleDocs: Record<string, string> = {};
+    const customPrompts: Record<string, string> = {};
+    const agentWorkspaceIds: Record<string, string[]> = {};
     for (const agentId of sddAgentsOrder.length > 0 ? sddAgentsOrder : squadAgentIds) {
       const skills = resolveAgentSkills(agentConfigs, activeWs?.id ?? null, agentId);
       if (skills) roleDocs[agentId] = skills;
+      const cfgKey = `${activeWs?.id ?? null}_${agentId}`;
+      const agentCfg = agentConfigs[cfgKey];
+      if (agentCfg?.prompt?.trim()) customPrompts[agentId] = agentCfg.prompt;
+      if (agentCfg?.workspaceIds?.length) agentWorkspaceIds[agentId] = agentCfg.workspaceIds;
     }
 
     const title = story.slice(0, 40) + (story.length > 40 ? '...' : '');
@@ -538,6 +551,8 @@ export default function App() {
         workspace_context: fullContext || undefined,
         agents_order: sddAgentsOrder.length > 0 ? sddAgentsOrder : undefined,
         role_docs: Object.keys(roleDocs).length > 0 ? roleDocs : undefined,
+        custom_prompts: Object.keys(customPrompts).length > 0 ? customPrompts : undefined,
+        agent_workspace_ids: Object.keys(agentWorkspaceIds).length > 0 ? agentWorkspaceIds : undefined,
       };
       apiFlow = await flowsApi.create(params);
     } catch (err) {
@@ -845,7 +860,7 @@ export default function App() {
     return (
       <div
         className="fixed inset-0 flex items-center justify-center"
-        style={{ background: '#0c0720' }}
+        style={{ background: '#0d0720' }}
       >
         <div
           className="font-pixel"

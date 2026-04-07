@@ -24,7 +24,7 @@ export default function SidePanel({ open, side, title, onClose, children, width 
         bottom: 0,
         [side]: 0,
         width,
-        background: '#0c0720',
+        background: '#0d0720',
         borderRight: side === 'left' ? '1px solid #2a1050' : 'none',
         borderLeft: side === 'right' ? '1px solid #2a1050' : 'none',
         transform,
@@ -47,7 +47,7 @@ export default function SidePanel({ open, side, title, onClose, children, width 
       >
         <h2
           className="ui-label"
-          style={{ fontSize: '10px', color: '#a78bfa', letterSpacing: '0.14em' }}
+          style={{ fontSize: '10px', color: '#7c3aed', letterSpacing: '0.14em' }}
         >
           {title}
         </h2>
@@ -65,7 +65,7 @@ export default function SidePanel({ open, side, title, onClose, children, width 
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.borderColor = '#4c1d95';
-            e.currentTarget.style.color = '#a78bfa';
+            e.currentTarget.style.color = '#7c3aed';
             e.currentTarget.style.background = 'rgba(124,58,237,.1)';
           }}
           onMouseLeave={(e) => {
