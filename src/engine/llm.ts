@@ -316,21 +316,19 @@ Regras obrigatórias:
 // ── Multi-file generation prompts ───────────────────────────────────────────
 
 export const FILE_PLAN_PROMPT = `Você é um engenheiro de software sênior.
-Com base no SDD e na análise da equipe, liste TODOS os arquivos que precisam ser criados ou modificados.
+Com base no SDD, na análise da equipe e na stack do projeto, liste TODOS os arquivos que precisam ser criados ou modificados.
 
 Retorne APENAS JSON válido no formato:
 [
-  {"path": "src/models/user.py", "description": "SQLAlchemy model de usuario — define User, campos e relacoes"},
-  {"path": "src/services/user_service.py", "description": "Logica de negocio — importa de models/user.py"},
-  {"path": "src/routes/users.py", "description": "Endpoints REST — importa de services/user_service.py"},
-  {"path": "src/main.py", "description": "App principal — importa e registra routes/users.py"}
+  {"path": "caminho/do/arquivo.ext", "description": "O que este arquivo faz e de quais outros arquivos ele depende"}
 ]
 
 Regras:
+- Use a linguagem, framework e estrutura de pastas adequados ao SDD e à stack do projeto
 - Inclua paths completos relativos à raiz do projeto
-- ORDENE POR DEPENDENCIA: arquivos base primeiro (models), depois services, depois routes/controllers, depois main/app
-- Na description, indique de qual arquivo cada um importa ou depende
-- Inclua arquivos de configuração quando necessário (requirements.txt, package.json, etc.)
+- Ordene por dependência: arquivos que NÃO dependem de nenhum outro primeiro, depois os que importam deles
+- Na description, indique as dependências (ex: "Depende de X e Y")
+- Inclua arquivos de configuração quando necessário
 - Máximo 10 arquivos
 - Retorne APENAS o JSON, sem texto adicional`;
 
@@ -338,18 +336,17 @@ export const SINGLE_FILE_GEN_PROMPT = `Você é um engenheiro de software sênio
 Gere o código COMPLETO para o arquivo especificado.
 ${EXISTING_CODE_INSTRUCTION}
 
-IMPORTANTE — ARQUIVOS DO PROJETO:
-Você está gerando UM arquivo de um projeto com múltiplos arquivos.
-Se outros arquivos já foram gerados, você DEVE:
-1. Usar os MESMOS nomes de classes, funções e variáveis definidos nos arquivos anteriores
-2. Adicionar os imports corretos (ex: from models.user import User)
-3. Respeitar as interfaces e tipos já definidos
-4. NÃO redefinir o que já existe — apenas importe e use
+CONTEXTO DE PROJETO MULTI-ARQUIVO:
+Você está gerando UM arquivo dentro de um projeto com múltiplos arquivos.
+Os arquivos já gerados estão no contexto. Você DEVE:
+1. IMPORTAR classes, funções e tipos dos arquivos já gerados — use os nomes exatos que aparecem no código deles
+2. NÃO redefinir o que já existe em outro arquivo — apenas importe e use
+3. Manter consistência de nomes, tipos e interfaces com os outros arquivos
 
 Regras obrigatórias:
 - Retorne APENAS o código em um único bloco markdown (\`\`\`linguagem ... \`\`\`)
 - O arquivo deve ser completo e executável
-- Inclua TODOS os imports necessários no topo
+- Inclua TODOS os imports necessários no topo do arquivo
 - Nenhum texto fora do bloco de código`;
 
 // ── Token estimation & context budget ───────────────────────────────────────
