@@ -35,6 +35,11 @@ export interface LLMResult {
   tokensOutput?: number;
 }
 
+export interface FilePlanEntry {
+  path: string;
+  description: string;
+}
+
 // ── System prompts por papel ─────────────────────────────────────────────────
 //
 // Usados quando o usuário NÃO configurou um prompt customizado no AgentCanvas.
@@ -90,12 +95,16 @@ Para a história de usuário fornecida, liste:
 Responda em português, de forma específica e testável. Máximo 3 frases.`,
 
   design: `Você é Designer UX/UI sênior com domínio de design systems.
-Para a história de usuário fornecida, especifique:
-- Componentes visuais do design system a utilizar ou criar
-- Principal decisão de UX (fluxo, feedback, estados)
-- Ponto de handoff para o time de front-end
+Para a história de usuário fornecida, entregue uma especificação estruturada:
 
-Responda em português, de forma clara e orientada à implementação. Máximo 3 frases.`,
+1. **Componentes**: Liste cada componente UI necessário com nome, props, estados (default, hover, active, disabled, loading, error)
+2. **Layout**: Descreva a estrutura da tela (grid, flex, breakpoints responsivos)
+3. **Design Tokens**: Especifique cores, espaçamentos, tipografia e sombras a usar
+4. **Fluxo UX**: Descreva o fluxo do usuário passo a passo (entrada → ação → feedback → resultado)
+5. **Acessibilidade**: ARIA labels, contraste mínimo, navegação por teclado
+6. **Handoff**: O que o dev-front precisa saber para implementar (CSS classes, variáveis, animações)
+
+Responda em português, de forma técnica e implementável pelo time de frontend.`,
 
   devops: `Você é Engenheiro DevOps sênior especializado em IaC e cloud AWS.
 Para a história de usuário e código gerado pela equipe, identifique:
@@ -298,6 +307,40 @@ Regras obrigatórias:
 const CODE_GEN_DEFAULT = `Você é um engenheiro de software sênior.
 Com base na análise da equipe, implemente o código completo e funcional.
 ${EXISTING_CODE_INSTRUCTION}
+
+Regras obrigatórias:
+- Retorne APENAS o código em um único bloco markdown (\`\`\`linguagem ... \`\`\`)
+- Código completo, executável, seguindo boas práticas
+- Nenhum texto fora do bloco de código`;
+
+// ── Multi-file generation prompts ───────────────────────────────────────────
+
+export const FILE_PLAN_PROMPT = `Você é um engenheiro de software sênior.
+Com base no SDD e na análise da equipe, liste TODOS os arquivos que precisam ser criados ou modificados.
+
+Retorne APENAS JSON válido no formato:
+[
+  {"path": "src/routes/users.py", "description": "CRUD endpoints de usuarios"},
+  {"path": "src/models/user.py", "description": "SQLAlchemy model de usuario"},
+  {"path": "src/main.py", "description": "FastAPI app com routers"}
+]
+
+Regras:
+- Inclua paths completos relativos à raiz do projeto
+- Ordene por dependência (arquivos base primeiro, depois os que dependem deles)
+- Inclua arquivos de configuração quando necessário (requirements.txt, package.json, etc.)
+- Máximo 10 arquivos
+- Retorne APENAS o JSON, sem texto adicional`;
+
+export const SINGLE_FILE_PROMPT = `Você é um engenheiro de software sênior.
+Gere o código COMPLETO para o arquivo especificado abaixo.
+${EXISTING_CODE_INSTRUCTION}
+
+Regras obrigatórias:
+- Retorne APENAS o código em um único bloco markdown (\`\`\`linguagem ... \`\`\`)
+- O arquivo deve ser completo, executável e importar corretamente dos outros arquivos do projeto
+- Se arquivos anteriores já foram gerados, use os imports e interfaces corretos
+- Nenhum texto fora do bloco de código`;
 
 Regras obrigatórias:
 - Retorne APENAS o código em um único bloco markdown (\`\`\`linguagem ... \`\`\`)

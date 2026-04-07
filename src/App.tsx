@@ -528,6 +528,8 @@ export default function App() {
     const roleDocs: Record<string, string> = {};
     const customPrompts: Record<string, string> = {};
     const agentWorkspaceIds: Record<string, string[]> = {};
+    const agentMcpServers: Record<string, { url: string; token?: string }[]> = {};
+    const agentTools: Record<string, string[]> = {};
     for (const agentId of sddAgentsOrder.length > 0 ? sddAgentsOrder : squadAgentIds) {
       const skills = resolveAgentSkills(agentConfigs, activeWs?.id ?? null, agentId);
       if (skills) roleDocs[agentId] = skills;
@@ -535,6 +537,10 @@ export default function App() {
       const agentCfg = agentConfigs[cfgKey];
       if (agentCfg?.prompt?.trim()) customPrompts[agentId] = agentCfg.prompt;
       if (agentCfg?.workspaceIds?.length) agentWorkspaceIds[agentId] = agentCfg.workspaceIds;
+      if (agentCfg?.mcpServers?.length) {
+        agentMcpServers[agentId] = agentCfg.mcpServers.map((s) => ({ url: s.url, token: s.token }));
+      }
+      if (agentCfg?.tools?.length) agentTools[agentId] = agentCfg.tools;
     }
 
     const title = story.slice(0, 40) + (story.length > 40 ? '...' : '');
@@ -553,6 +559,8 @@ export default function App() {
         role_docs: Object.keys(roleDocs).length > 0 ? roleDocs : undefined,
         custom_prompts: Object.keys(customPrompts).length > 0 ? customPrompts : undefined,
         agent_workspace_ids: Object.keys(agentWorkspaceIds).length > 0 ? agentWorkspaceIds : undefined,
+        agent_mcp_servers: Object.keys(agentMcpServers).length > 0 ? agentMcpServers : undefined,
+        agent_tools: Object.keys(agentTools).length > 0 ? agentTools : undefined,
       };
       apiFlow = await flowsApi.create(params);
     } catch (err) {
@@ -708,124 +716,128 @@ export default function App() {
         // Fetch existing repo code for general context
         showBubble(agentId, 'Lendo repositorio...', false);
         const repoCodeCtx = await buildCodeContext(githubToken, activeWs.githubRepo, baseBranch, story).catch(() => '');
+        const combinedCtx = [wsCtx, infraInfoCtx, repoCodeCtx].filter(Boolean).join('\n\n');
 
-        // Pre-guess candidate file paths so we can read existing versions
-        let candidatePaths: string[];
-        if (isInfra) {
-          candidatePaths = [guessInfraFilePath()];
-        } else if (isTest) {
-          // Try all common test paths — we don't know the lang yet
-          candidatePaths = [
-            guessTestFilePath(story, 'python'), guessTestFilePath(story, 'ts'),
-            guessTestFilePath(story, 'java'), guessTestFilePath(story, 'js'),
-            guessTestFilePath(story, 'go'), guessTestFilePath(story, 'kotlin'),
-          ];
-        } else {
-          candidatePaths = [
-            guessFilePath(story, 'python'), guessFilePath(story, 'ts'),
-            guessFilePath(story, 'tsx'), guessFilePath(story, 'java'),
-            guessFilePath(story, 'js'), guessFilePath(story, 'go'),
-          ];
-        }
-        // Deduplicate
-        candidatePaths = [...new Set(candidatePaths)];
-
-        // Read existing file content from repo (try each candidate)
-        let existingFileCtx = '';
-        let existingFilePath = '';
-        for (const cp of candidatePaths) {
-          try {
-            const existingCode = await fetchFileContent(githubToken, activeWs.githubRepo, cp, baseBranch);
-            if (existingCode.trim()) {
-              existingFilePath = cp;
-              existingFileCtx = `\n\n=== CODIGO EXISTENTE EM ${cp} (MODIFIQUE/ESTENDA, NAO SUBSTITUA) ===\n\`\`\`\n${existingCode}\n\`\`\`\n=== FIM DO CODIGO EXISTENTE ===`;
-              break; // Found one — use it
-            }
-          } catch { /* file doesn't exist at this path */ }
-        }
-
-        const combinedCtx = [wsCtx, infraInfoCtx, repoCodeCtx, existingFileCtx].filter(Boolean).join('\n\n');
-
-        showBubble(agentId, isInfra ? 'Gerando Terraform...' : existingFileCtx ? 'Atualizando codigo...' : 'Gerando codigo...', false);
+        // ── Pass 1: Plan files ──────────────────────────────────────────
+        showBubble(agentId, 'Planejando arquivos...', false);
         window._setAgentWorking?.(agentId, true);
-        const { text: codeText } = await callAgentLLM({
+
+        const { text: planText } = await callAgentLLM({
           agentId, agentRole: deliveryStep.role, modelId, apiKey,
           story, previousSteps: prevResults,
-          workspaceContext: combinedCtx || undefined, codeGen: true,
+          workspaceContext: combinedCtx || undefined,
+          customPrompt: (await import('./engine/llm')).FILE_PLAN_PROMPT,
         });
 
-        const blocks = extractCodeBlocks(codeText);
-        const lang = blocks[0]?.lang ?? '';
+        // Parse file plan JSON
+        let filePlan: { path: string; description: string }[] = [];
+        try {
+          const jsonMatch = planText.match(/\[[\s\S]*\]/);
+          if (jsonMatch) filePlan = JSON.parse(jsonMatch[0]);
+        } catch { /* parse failed */ }
 
-        // Pick the right code block: for QA/test, skip blocks that match already committed paths
-        let selectedBlock = blocks[0];
-
-        // Use the existing file path if we found one, otherwise guess from generated lang
-        let filePath: string;
-        if (existingFilePath) {
-          filePath = existingFilePath; // Keep the same path — we're updating the file
-        } else if (isInfra) {
-          filePath = guessInfraFilePath();
-        } else if (isTest) {
-          filePath = guessTestFilePath(story, lang);
-        } else {
-          filePath = guessFilePath(story, lang);
+        // Fallback: if LLM didn't return valid plan, do single-file (legacy)
+        if (!filePlan.length) {
+          filePlan = [{ path: isInfra ? guessInfraFilePath() : isTest ? guessTestFilePath(story, '') : guessFilePath(story, ''), description: 'Arquivo principal' }];
         }
 
-        // If QA generated multiple blocks, find the one that looks like a test
-        if (isTest && blocks.length > 1) {
-          const testBlock = blocks.find((b) =>
-            /test|spec|describe|it\(|assert|expect|pytest|junit|@Test/i.test(b.code)
-          );
-          if (testBlock) selectedBlock = testBlock;
-        }
+        addLog({ text: `${deliveryStep.role}: ${filePlan.length} arquivo(s) planejado(s)`, tag: { label: 'task', type: 'task' } });
 
-        // Avoid overwriting files already committed by another agent
-        if (committedPaths.has(filePath)) {
-          const ext = filePath.split('.').pop() || 'txt';
-          const base = filePath.replace(/\.[^.]+$/, '');
-          filePath = `${base}_${agentId}.${ext}`;
+        // ── Pass 2: Generate each file ──────────────────────────────────
+        const generatedFiles: { path: string; code: string }[] = [];
+        let deliveryFailed = false;
+
+        for (let fi = 0; fi < filePlan.length; fi++) {
+          const fp = filePlan[fi];
+          showBubble(agentId, `[${fi + 1}/${filePlan.length}] ${fp.path.split('/').pop()}...`, false);
+
+          // Build context from previously generated files
+          const prevFilesCtx = generatedFiles.length > 0
+            ? generatedFiles.map((g) => `=== ${g.path} ===\n\`\`\`\n${g.code}\n\`\`\``).join('\n\n')
+            : '';
+
+          // Read existing version of this file from repo
+          let existingFileCtx = '';
+          try {
+            const existing = await fetchFileContent(githubToken, activeWs.githubRepo, fp.path, baseBranch);
+            if (existing.trim()) {
+              existingFileCtx = `\n\n=== CODIGO EXISTENTE EM ${fp.path} (MODIFIQUE/ESTENDA, NAO SUBSTITUA) ===\n\`\`\`\n${existing}\n\`\`\`\n=== FIM ===`;
+            }
+          } catch { /* file doesn't exist */ }
+
+          const fileCtx = [combinedCtx, prevFilesCtx ? `Arquivos ja gerados neste projeto:\n${prevFilesCtx}` : '', existingFileCtx].filter(Boolean).join('\n\n');
+
+          const fileStory = `${story}\n\nArquivo a gerar: ${fp.path}\nDescricao: ${fp.description}`;
+
+          const { text: fileCode } = await callAgentLLM({
+            agentId, agentRole: deliveryStep.role, modelId, apiKey,
+            story: fileStory, previousSteps: prevResults,
+            workspaceContext: fileCtx || undefined, codeGen: true,
+          });
+
+          const blocks = extractCodeBlocks(fileCode);
+          const selectedBlock = blocks[0];
+          if (!selectedBlock) continue;
+
+          // Avoid path conflicts
+          let filePath = fp.path;
+          if (committedPaths.has(filePath)) {
+            const ext = filePath.split('.').pop() || 'txt';
+            const base = filePath.replace(/\.[^.]+$/, '');
+            filePath = `${base}_${agentId}.${ext}`;
+          }
+
+          generatedFiles.push({ path: filePath, code: selectedBlock.code });
+
+          // Show approval for each file
+          window._setAgentWorking?.(agentId, false);
+          clearBubble(agentId);
+          showBubble(agentId, `Aprovar ${filePath.split('/').pop()}?`, false);
+
+          updateStep(flowId, deliveryStepId, { status: 'approval', code: fileCode, filePath });
+          const approved = await waitForApproval();
+          clearBubble(agentId);
+
+          if (approved) {
+            showBubble(agentId, 'Commitando...', false);
+            try {
+              if (!branchCtx) {
+                branchCtx = await prepareBranch(
+                  githubToken, activeWs.githubRepo, story, activeWs.githubBaseBranch ?? 'main'
+                );
+              }
+              await commitToBranch(branchCtx, filePath, selectedBlock.code, deliveryStep.role);
+              committedPaths.add(filePath);
+              addLog({ text: `${deliveryStep.role}: ${filePath} commitado [${fi + 1}/${filePlan.length}]`, tag: { label: 'deploy', type: 'deploy' } });
+            } catch (err) {
+              const msg = (err as Error).message ?? String(err);
+              addLog({ text: `GitHub commit falhou: ${msg.slice(0, 70)}. Delivery interrompido.`, tag: { label: 'alert', type: 'alert' } });
+              updateStep(flowId, deliveryStepId, { status: 'error', result: msg.slice(0, 80) });
+              clearBubble(agentId);
+              backDesk(agentId);
+              deliveryFailed = true;
+              break;
+            }
+            clearBubble(agentId);
+            window._setAgentWorking?.(agentId, true);
+          } else {
+            addLog({ text: `${deliveryStep.role}: ${filePath} pulado pelo usuario`, tag: { label: 'agent', type: 'agent' } });
+          }
         }
 
         window._setAgentWorking?.(agentId, false);
-        clearBubble(agentId);
-        showBubble(agentId, 'Aguardando ok...', false);
 
-        updateStep(flowId, deliveryStepId, { status: 'approval', code: codeText, filePath });
-        const approved = await waitForApproval();
-        clearBubble(agentId);
+        if (deliveryFailed) break; // Stop entire delivery
 
-        if (approved && selectedBlock) {
-          showBubble(agentId, 'Commitando...', false);
-          try {
-            if (!branchCtx) {
-              branchCtx = await prepareBranch(
-                githubToken, activeWs.githubRepo, story, activeWs.githubBaseBranch ?? 'main'
-              );
-            }
-            await commitToBranch(branchCtx, filePath, selectedBlock.code, deliveryStep.role);
-            committedPaths.add(filePath);
-            updateStep(flowId, deliveryStepId, { status: 'done', result: `${filePath}` });
-            addLog({ text: `${deliveryStep.role}: ${filePath} commitado`, tag: { label: 'deploy', type: 'deploy' } });
-          } catch (err) {
-            const msg = (err as Error).message ?? String(err);
-            updateStep(flowId, deliveryStepId, { status: 'error', result: msg.slice(0, 80) });
-            addLog({ text: `GitHub commit falhou: ${msg.slice(0, 70)}. Delivery interrompido.`, tag: { label: 'alert', type: 'alert' } });
-            clearBubble(agentId);
-            backDesk(agentId);
-            // Stop delivery — don't commit more files or open PR with incomplete code
-            break;
-          }
-          clearBubble(agentId);
-          showBubble(agentId, `${filePath.split('/').pop()}`, false);
-          await delay(1500);
-          clearBubble(agentId);
-          backDesk(agentId);
-          await delay(300);
+        const committedByAgent = generatedFiles.filter((g) => committedPaths.has(g.path)).map((g) => g.path);
+        if (committedByAgent.length > 0) {
+          updateStep(flowId, deliveryStepId, { status: 'done', result: committedByAgent.join(', ') });
         } else {
-          updateStep(flowId, deliveryStepId, { status: 'error', result: 'Cancelado' });
-          backDesk(agentId);
+          updateStep(flowId, deliveryStepId, { status: 'error', result: 'Nenhum arquivo commitado' });
         }
+        clearBubble(agentId);
+        backDesk(agentId);
+        await delay(300);
       }
 
       // Commit SDD alongside code (blocking — not best-effort)

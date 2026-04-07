@@ -226,6 +226,8 @@ export interface FlowCreateParams {
   role_docs?: Record<string, string>;  // per-role docs: { "dev-back": "techDocs...", "qa": "testDocs..." }
   custom_prompts?: Record<string, string>;  // per-agent custom system prompts from AgentCanvas
   agent_workspace_ids?: Record<string, string[]>;  // per-agent workspace assignments: { "dev-back": ["ws1","ws2"] }
+  agent_mcp_servers?: Record<string, { url: string; token?: string }[]>;  // per-agent MCP servers
+  agent_tools?: Record<string, string[]>;  // per-agent enabled tools: { "dev-back": ["git","code_exec","db_query"] }
 }
 
 export const flowsApi = {
