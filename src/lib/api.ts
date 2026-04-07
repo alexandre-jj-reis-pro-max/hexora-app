@@ -230,6 +230,22 @@ export interface FlowCreateParams {
   agent_tools?: Record<string, string[]>;  // per-agent enabled tools: { "dev-back": ["git","code_exec","db_query"] }
 }
 
+// ── Code Validation ──────────────────────────────────────────────────────────
+
+export interface ValidateResult {
+  valid: boolean;
+  code: string;
+  issues: string[];
+}
+
+export const llmApi = {
+  validateCode: (filePath: string, code: string, modelId: string, userId: string) =>
+    request<ValidateResult>('/llm/validate-code', {
+      method: 'POST',
+      body: JSON.stringify({ file_path: filePath, code, model_id: modelId, user_id: userId }),
+    }),
+};
+
 export const flowsApi = {
   create: (params: FlowCreateParams) =>
     request<APIFlow>('/flows', {

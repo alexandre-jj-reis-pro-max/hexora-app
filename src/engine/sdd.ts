@@ -83,23 +83,80 @@ export function buildSquadSummary(
  * Returns null if JSON is completely unparseable.
  */
 export function parsePOResponse(text: string): POResponse | null {
+  // Strategy 1: Direct parse
   try {
-    // Try direct parse first
     const parsed = JSON.parse(text);
     if (parsed.status) return parsed as POResponse;
-  } catch {
-    // Try regex extraction
+  } catch { /* continue */ }
+
+  // Strategy 2: Extract JSON from markdown code block
+  const codeBlock = text.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
+  if (codeBlock) {
     try {
-      const match = text.match(/\{[\s\S]*\}/);
-      if (match) {
-        const parsed = JSON.parse(match[0]);
-        if (parsed.status) return parsed as POResponse;
-      }
+      const parsed = JSON.parse(codeBlock[1].trim());
+      if (parsed.status) return parsed as POResponse;
+    } catch { /* continue */ }
+  }
+
+  // Strategy 3: Find outermost { ... } with balanced braces
+  const jsonStr = extractBalancedJson(text);
+  if (jsonStr) {
+    try {
+      const parsed = JSON.parse(jsonStr);
+      if (parsed.status) return parsed as POResponse;
     } catch {
-      // Complete failure
+      // Strategy 4: Clean common LLM JSON mistakes and retry
+      const cleaned = cleanLlmJson(jsonStr);
+      try {
+        const parsed = JSON.parse(cleaned);
+        if (parsed.status) return parsed as POResponse;
+      } catch { /* complete failure */ }
     }
   }
+
   return null;
+}
+
+/** Extract balanced JSON object from text (handles nested braces) */
+function extractBalancedJson(text: string): string | null {
+  const start = text.indexOf('{');
+  if (start === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+
+    if (escape) { escape = false; continue; }
+    if (ch === '\\') { escape = true; continue; }
+
+    if (ch === '"' && !escape) { inString = !inString; continue; }
+    if (inString) continue;
+
+    if (ch === '{') depth++;
+    if (ch === '}') {
+      depth--;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  // Return best effort even if unbalanced
+  return text.slice(start);
+}
+
+/** Fix common LLM JSON mistakes */
+function cleanLlmJson(json: string): string {
+  let cleaned = json;
+  // Remove trailing commas before } or ]
+  cleaned = cleaned.replace(/,\s*([}\]])/g, '$1');
+  // Fix unquoted keys
+  cleaned = cleaned.replace(/([{,]\s*)(\w+)\s*:/g, '$1"$2":');
+  // Fix single quotes to double quotes (careful with apostrophes in text)
+  cleaned = cleaned.replace(/:\s*'([^']*)'/g, ': "$1"');
+  // Remove control characters
+  cleaned = cleaned.replace(/[\x00-\x1f\x7f]/g, (c) => c === '\n' || c === '\t' ? c : '');
+  return cleaned;
 }
 
 // ── Validate SDD ────────────────────────────────────────────────────────────

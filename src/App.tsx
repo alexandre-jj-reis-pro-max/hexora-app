@@ -19,7 +19,7 @@ import { callAgentLLM, PO_REFINE_PROMPT, FILE_PLAN_PROMPT, SINGLE_FILE_GEN_PROMP
 import { buildSquadSummary, parsePOResponse, validateSDD, fillPlaceholders, renderSddMarkdown } from './engine/sdd';
 import { delay } from './engine/orchestration';
 import { subscribeFlow } from './engine/flow-sse';
-import { flowsApi, workspacesApi, type FlowCreateParams } from './lib/api';
+import { flowsApi, workspacesApi, llmApi, type FlowCreateParams } from './lib/api';
 import { prepareBranch, commitToBranch, openPR, extractCodeBlocks, guessFilePath, guessTestFilePath, guessInfraFilePath, fileExistsInBranch, buildCodeContext, fetchExistingSDDs, fetchFileContent } from './engine/github';
 import { useWorkspaceStore } from './store/useWorkspaceStore';
 import { useProfileStore as useProfileStoreRaw } from './store/useProfileStore';
@@ -829,9 +829,23 @@ export default function App() {
           continue;
         }
 
-        // ── Commit ALL approved files ───────────────────────────────────
-        showBubble(agentId, 'Commitando...', false);
+        // ── Validate + Commit ALL approved files ────────────────────────
+        showBubble(agentId, 'Validando codigo...', false);
         let deliveryFailed = false;
+        const userId = useAuthStore.getState().user?.id || '';
+
+        // Validate & auto-fix each file before committing
+        for (const file of generatedFiles) {
+          try {
+            const validation = await llmApi.validateCode(file.path, file.code, modelId, userId);
+            if (validation.issues.length > 0) {
+              addLog({ text: `${file.path}: ${validation.issues.length} erro(s) corrigido(s) automaticamente`, tag: { label: 'agent', type: 'agent' } });
+              file.code = validation.code; // Use fixed code
+            }
+          } catch { /* validation service unavailable — commit as-is */ }
+        }
+
+        showBubble(agentId, 'Commitando...', false);
 
         for (const file of generatedFiles) {
           try {
