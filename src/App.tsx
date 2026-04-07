@@ -680,7 +680,7 @@ export default function App() {
             clearBubble(agentId);
             showBubble(agentId, 'Terraform ja existe', false);
             updateStep(flowId, deliveryStepId, { status: 'done', result: `infra/main.tf ja existe no repositorio` });
-            await delay(1800);
+            await delay(600);
             clearBubble(agentId);
             backDesk(agentId);
             continue;
@@ -743,27 +743,32 @@ export default function App() {
 
         addLog({ text: `${deliveryStep.role}: ${filePlan.length} arquivo(s) planejado(s)`, tag: { label: 'task', type: 'task' } });
 
-        // ── Pass 2: Generate ALL files first ─────────────────────────────
+        // ── Pre-fetch existing files in parallel ────────────────────────
+        showBubble(agentId, 'Verificando arquivos existentes...', false);
+        const existingFiles: Record<string, string> = {};
+        await Promise.allSettled(
+          filePlan.map(async (fp) => {
+            try {
+              const content = await fetchFileContent(githubToken, activeWs.githubRepo, fp.path, baseBranch);
+              if (content.trim()) existingFiles[fp.path] = content;
+            } catch { /* file doesn't exist */ }
+          })
+        );
+
+        // ── Pass 2: Generate ALL files ──────────────────────────────────
         const generatedFiles: { path: string; code: string; lang: string }[] = [];
+        const projectStructure = `Estrutura do projeto (${filePlan.length} arquivos):\n${filePlan.map((f, i) => `${i + 1}. ${f.path} — ${f.description}`).join('\n')}`;
 
         for (let fi = 0; fi < filePlan.length; fi++) {
           const fp = filePlan[fi];
           showBubble(agentId, `Gerando [${fi + 1}/${filePlan.length}] ${fp.path.split('/').pop()}...`, false);
 
-          // Build context: full project file list + already generated code
-          const projectStructure = `Estrutura do projeto (${filePlan.length} arquivos):\n${filePlan.map((f, i) => `${i + 1}. ${f.path} — ${f.description}`).join('\n')}`;
-
           const prevFilesCtx = generatedFiles.length > 0
             ? `Arquivos JA GERADOS (use os imports/classes/funcoes definidos aqui):\n\n${generatedFiles.map((g) => `=== ${g.path} ===\n\`\`\`${g.lang}\n${g.code}\n\`\`\``).join('\n\n')}`
             : '';
 
-          let existingFileCtx = '';
-          try {
-            const existing = await fetchFileContent(githubToken, activeWs.githubRepo, fp.path, baseBranch);
-            if (existing.trim()) {
-              existingFileCtx = `\n\nCODIGO EXISTENTE EM ${fp.path}:\n\`\`\`\n${existing}\n\`\`\``;
-            }
-          } catch { /* file doesn't exist */ }
+          const existingCode = existingFiles[fp.path];
+          const existingFileCtx = existingCode ? `\n\nCODIGO EXISTENTE EM ${fp.path}:\n\`\`\`\n${existingCode}\n\`\`\`` : '';
 
           const fileCtx = [combinedCtx, projectStructure, prevFilesCtx, existingFileCtx].filter(Boolean).join('\n\n');
 
@@ -855,7 +860,7 @@ export default function App() {
         updateStep(flowId, deliveryStepId, { status: 'done', result: `${committedByAgent.length} arquivo(s): ${committedByAgent.join(', ')}` });
         clearBubble(agentId);
         backDesk(agentId);
-        await delay(300);
+        await delay(150);
       }
 
       // Commit SDD alongside code (blocking — not best-effort)
