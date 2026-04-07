@@ -749,7 +749,7 @@ export default function App() {
         await Promise.allSettled(
           filePlan.map(async (fp) => {
             try {
-              const content = await fetchFileContent(githubToken, activeWs.githubRepo, fp.path, baseBranch);
+              const content = await fetchFileContent(githubToken, activeWs.githubRepo!, fp.path, baseBranch);
               if (content.trim()) existingFiles[fp.path] = content;
             } catch { /* file doesn't exist */ }
           })
