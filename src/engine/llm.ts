@@ -342,11 +342,6 @@ Regras obrigatórias:
 - Se arquivos anteriores já foram gerados, use os imports e interfaces corretos
 - Nenhum texto fora do bloco de código`;
 
-Regras obrigatórias:
-- Retorne APENAS o código em um único bloco markdown (\`\`\`linguagem ... \`\`\`)
-- Código completo, executável, seguindo boas práticas
-- Nenhum texto fora do bloco de código`;
-
 // ── Token estimation & context budget ───────────────────────────────────────
 
 /** Aproximação rápida: 1 token ≈ 4 chars (funciona bem pra PT/EN misturado) */
