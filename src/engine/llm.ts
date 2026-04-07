@@ -320,26 +320,36 @@ Com base no SDD e na análise da equipe, liste TODOS os arquivos que precisam se
 
 Retorne APENAS JSON válido no formato:
 [
-  {"path": "src/routes/users.py", "description": "CRUD endpoints de usuarios"},
-  {"path": "src/models/user.py", "description": "SQLAlchemy model de usuario"},
-  {"path": "src/main.py", "description": "FastAPI app com routers"}
+  {"path": "src/models/user.py", "description": "SQLAlchemy model de usuario — define User, campos e relacoes"},
+  {"path": "src/services/user_service.py", "description": "Logica de negocio — importa de models/user.py"},
+  {"path": "src/routes/users.py", "description": "Endpoints REST — importa de services/user_service.py"},
+  {"path": "src/main.py", "description": "App principal — importa e registra routes/users.py"}
 ]
 
 Regras:
 - Inclua paths completos relativos à raiz do projeto
-- Ordene por dependência (arquivos base primeiro, depois os que dependem deles)
+- ORDENE POR DEPENDENCIA: arquivos base primeiro (models), depois services, depois routes/controllers, depois main/app
+- Na description, indique de qual arquivo cada um importa ou depende
 - Inclua arquivos de configuração quando necessário (requirements.txt, package.json, etc.)
 - Máximo 10 arquivos
 - Retorne APENAS o JSON, sem texto adicional`;
 
-export const SINGLE_FILE_PROMPT = `Você é um engenheiro de software sênior.
-Gere o código COMPLETO para o arquivo especificado abaixo.
+export const SINGLE_FILE_GEN_PROMPT = `Você é um engenheiro de software sênior.
+Gere o código COMPLETO para o arquivo especificado.
 ${EXISTING_CODE_INSTRUCTION}
+
+IMPORTANTE — ARQUIVOS DO PROJETO:
+Você está gerando UM arquivo de um projeto com múltiplos arquivos.
+Se outros arquivos já foram gerados, você DEVE:
+1. Usar os MESMOS nomes de classes, funções e variáveis definidos nos arquivos anteriores
+2. Adicionar os imports corretos (ex: from models.user import User)
+3. Respeitar as interfaces e tipos já definidos
+4. NÃO redefinir o que já existe — apenas importe e use
 
 Regras obrigatórias:
 - Retorne APENAS o código em um único bloco markdown (\`\`\`linguagem ... \`\`\`)
-- O arquivo deve ser completo, executável e importar corretamente dos outros arquivos do projeto
-- Se arquivos anteriores já foram gerados, use os imports e interfaces corretos
+- O arquivo deve ser completo e executável
+- Inclua TODOS os imports necessários no topo
 - Nenhum texto fora do bloco de código`;
 
 // ── Token estimation & context budget ───────────────────────────────────────

@@ -15,7 +15,7 @@ import { useFlowStore } from './store/useFlowStore';
 import { useProfileStore } from './store/useProfileStore';
 import { useAuthStore } from './store/useAuthStore';
 import { TEAM, LOUSA_POS } from './constants';
-import { callAgentLLM, PO_REFINE_PROMPT, FILE_PLAN_PROMPT, type SDDDocument } from './engine/llm';
+import { callAgentLLM, PO_REFINE_PROMPT, FILE_PLAN_PROMPT, SINGLE_FILE_GEN_PROMPT, type SDDDocument } from './engine/llm';
 import { buildSquadSummary, parsePOResponse, validateSDD, fillPlaceholders, renderSddMarkdown } from './engine/sdd';
 import { delay } from './engine/orchestration';
 import { subscribeFlow } from './engine/flow-sse';
@@ -750,25 +750,30 @@ export default function App() {
           const fp = filePlan[fi];
           showBubble(agentId, `Gerando [${fi + 1}/${filePlan.length}] ${fp.path.split('/').pop()}...`, false);
 
+          // Build context: full project file list + already generated code
+          const projectStructure = `Estrutura do projeto (${filePlan.length} arquivos):\n${filePlan.map((f, i) => `${i + 1}. ${f.path} — ${f.description}`).join('\n')}`;
+
           const prevFilesCtx = generatedFiles.length > 0
-            ? generatedFiles.map((g) => `=== ${g.path} ===\n\`\`\`\n${g.code}\n\`\`\``).join('\n\n')
+            ? `Arquivos JA GERADOS (use os imports/classes/funcoes definidos aqui):\n\n${generatedFiles.map((g) => `=== ${g.path} ===\n\`\`\`${g.lang}\n${g.code}\n\`\`\``).join('\n\n')}`
             : '';
 
           let existingFileCtx = '';
           try {
             const existing = await fetchFileContent(githubToken, activeWs.githubRepo, fp.path, baseBranch);
             if (existing.trim()) {
-              existingFileCtx = `\n\n=== CODIGO EXISTENTE EM ${fp.path} ===\n\`\`\`\n${existing}\n\`\`\`\n=== FIM ===`;
+              existingFileCtx = `\n\nCODIGO EXISTENTE EM ${fp.path}:\n\`\`\`\n${existing}\n\`\`\``;
             }
           } catch { /* file doesn't exist */ }
 
-          const fileCtx = [combinedCtx, prevFilesCtx ? `Arquivos ja gerados:\n${prevFilesCtx}` : '', existingFileCtx].filter(Boolean).join('\n\n');
+          const fileCtx = [combinedCtx, projectStructure, prevFilesCtx, existingFileCtx].filter(Boolean).join('\n\n');
 
           const { text: fileCode } = await callAgentLLM({
             agentId, agentRole: deliveryStep.role, modelId, apiKey,
-            story: `${story}\n\nArquivo: ${fp.path}\nDescricao: ${fp.description}`,
+            story: `${story}\n\nArquivo a gerar AGORA: ${fp.path}\nDescricao: ${fp.description}`,
             previousSteps: prevResults,
-            workspaceContext: fileCtx || undefined, codeGen: true,
+            workspaceContext: fileCtx || undefined,
+            codeGen: true,
+            customPrompt: SINGLE_FILE_GEN_PROMPT,
           });
 
           const blocks = extractCodeBlocks(fileCode);
