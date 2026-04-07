@@ -485,30 +485,21 @@ async function callViaBackend(
   // Auto-refresh token on 401
   if (res.status === 401) {
     try {
-      const authUser = useAuthStore.getState().user;
-      if (authUser) {
-        // Try firebase-sync first (if Firebase is active), then re-login is up to user
-        const { auth: fbAuth } = await import('../lib/firebase').catch(() => ({ auth: null }));
-        const fbUser = fbAuth?.currentUser;
-        if (fbUser) {
-          const syncRes = await fetch(`${API_BASE_URL}/auth/firebase-sync`, {
+      // Try local refresh first
+      const oldToken = getToken();
+      if (oldToken) {
+        const refreshRes = await fetch(`${API_BASE_URL}/auth/refresh`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${oldToken}` },
+        });
+        if (refreshRes.ok) {
+          const refreshData = await refreshRes.json();
+          setToken(refreshData.access_token);
+          res = await fetch(`${API_BASE_URL}/llm/chat`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              firebase_uid: fbUser.uid,
-              email: fbUser.email,
-              name: fbUser.displayName || fbUser.email?.split('@')[0] || 'User',
-            }),
+            headers: buildHeaders(),
+            body: JSON.stringify(payload),
           });
-          if (syncRes.ok) {
-            const syncData = await syncRes.json();
-            setToken(syncData.access_token);
-            res = await fetch(`${API_BASE_URL}/llm/chat`, {
-              method: 'POST',
-              headers: buildHeaders(),
-              body: JSON.stringify(payload),
-            });
-          }
         }
       }
     } catch { /* ignore refresh failure */ }

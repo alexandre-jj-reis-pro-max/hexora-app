@@ -173,6 +173,9 @@ export const useAuthStore = create<AuthState>((set) => ({
       } catch { /* ignore if firebase not loaded */ }
     }
     clearToken();
+    // Clear persisted stores to avoid state leaking between users
+    localStorage.removeItem('hexora-profile');
+    localStorage.removeItem('hexora-flow');
     set({ user: null });
   },
 }));

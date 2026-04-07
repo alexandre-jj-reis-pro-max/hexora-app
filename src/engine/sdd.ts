@@ -205,6 +205,20 @@ export function renderSddMarkdown(sdd: SDDDocument, title: string): string {
       }
     } else if (typeof value === 'string') {
       lines.push(`## ${label}`, '', value, '');
+    } else if (Array.isArray(value)) {
+      lines.push(`## ${label}`, '');
+      for (const item of value) {
+        if (typeof item === 'string') {
+          lines.push(`- ${item}`);
+        } else if (typeof item === 'object' && item !== null) {
+          const title = item.titulo || item.title || item.id || '';
+          const desc = item.descricao || item.description || '';
+          lines.push(`- **${title}**: ${desc}`);
+        }
+      }
+      lines.push('');
+    } else if (typeof value === 'object' && value !== null) {
+      lines.push(`## ${label}`, '', '```json', JSON.stringify(value, null, 2), '```', '');
     }
   }
 

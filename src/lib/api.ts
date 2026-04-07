@@ -29,6 +29,21 @@ let _refreshing: Promise<boolean> | null = null;
 
 async function tryRefreshToken(): Promise<boolean> {
   try {
+    // 1. Try local refresh endpoint first (works in both modes)
+    const oldToken = getToken();
+    if (oldToken) {
+      const refreshRes = await fetch(`${BASE}/auth/refresh`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${oldToken}` },
+      });
+      if (refreshRes.ok) {
+        const data = await refreshRes.json();
+        setToken(data.access_token);
+        return true;
+      }
+    }
+
+    // 2. Fallback: Firebase sync (if Firebase is active)
     const { auth } = await import('./firebase').catch(() => ({ auth: null }));
     const user = auth?.currentUser;
     if (!user) return false;

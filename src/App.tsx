@@ -810,7 +810,11 @@ export default function App() {
           } catch (err) {
             const msg = (err as Error).message ?? String(err);
             updateStep(flowId, deliveryStepId, { status: 'error', result: msg.slice(0, 80) });
-            addLog({ text: `GitHub: ${msg.slice(0, 70)}`, tag: { label: 'alert', type: 'alert' } });
+            addLog({ text: `GitHub commit falhou: ${msg.slice(0, 70)}. Delivery interrompido.`, tag: { label: 'alert', type: 'alert' } });
+            clearBubble(agentId);
+            backDesk(agentId);
+            // Stop delivery — don't commit more files or open PR with incomplete code
+            break;
           }
           clearBubble(agentId);
           showBubble(agentId, `${filePath.split('/').pop()}`, false);
@@ -824,17 +828,20 @@ export default function App() {
         }
       }
 
-      // Commit SDD alongside code
-      if (branchCtx && sddMarkdown) {
+      // Commit SDD alongside code (blocking — not best-effort)
+      if (branchCtx && sddMarkdown && committedPaths.size > 0) {
         try {
           const sddPath = `docs/sdd-${story.slice(0, 30).toLowerCase().replace(/[^a-z0-9]+/g, '-')}.md`;
           await commitToBranch(branchCtx, sddPath, sddMarkdown, 'SDD');
           addLog({ text: `SDD commitado: ${sddPath}`, tag: { label: 'deploy', type: 'deploy' } });
-        } catch { /* SDD commit is best-effort */ }
+        } catch (err) {
+          const msg = (err as Error).message ?? String(err);
+          addLog({ text: `SDD commit falhou: ${msg.slice(0, 70)}`, tag: { label: 'alert', type: 'alert' } });
+        }
       }
 
-      // Open PR if at least one file was committed
-      if (branchCtx) {
+      // Open PR only if at least one file was committed successfully
+      if (branchCtx && committedPaths.size > 0) {
         showBubble('coord', 'Abrindo PR...', true);
         try {
           const prUrl = await openPR(branchCtx, story, prevResults);
