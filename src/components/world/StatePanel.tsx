@@ -129,6 +129,10 @@ export default function StatePanel() {
             (window as unknown as { _approvalCallback?: (ok: boolean) => void })._approvalCallback?.(false);
             setApprovalStep(null);
           }}
+          onDismiss={() => {
+            // Close modal without resolving — keeps the flow waiting
+            setApprovalStep(null);
+          }}
         />
       )}
 
@@ -393,11 +397,12 @@ function StepRow({ step, onApprove, onInfoRequest }: { step: FlowStep; onApprove
 // ── Code Approval Modal ──
 
 function CodeApprovalModal({
-  step, onConfirm, onCancel,
+  step, onConfirm, onCancel, onDismiss,
 }: {
   step: FlowStep;
   onConfirm: () => void;
   onCancel: () => void;
+  onDismiss?: () => void;
 }) {
   const isSpec = step.status === 'spec-review';
   const blocks = parseCodeBlocks(step.code ?? '');
@@ -411,7 +416,7 @@ function CodeApprovalModal({
         background: 'rgba(0,0,0,.80)', backdropFilter: 'blur(5px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}
-      onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}
+      onClick={(e) => { if (e.target === e.currentTarget) (onDismiss ?? onCancel)(); }}
     >
       <div style={{
         width: 'min(740px, 96vw)',
@@ -466,11 +471,14 @@ function CodeApprovalModal({
         {/* Footer */}
         <div style={{
           display: 'flex', gap: 10, padding: '14px 20px',
-          borderTop: '1px solid rgba(251,146,60,.2)', flexShrink: 0,
+          borderTop: `1px solid ${isSpec ? 'rgba(124,58,237,.2)' : 'rgba(251,146,60,.2)'}`, flexShrink: 0,
           background: 'rgba(0,0,0,.2)',
         }}>
           <div style={{ flex: 1, fontFamily: 'monospace', fontSize: '7px', color: '#4b5563', letterSpacing: '0.08em', lineHeight: 1.7 }}>
-            O código será commitado em <span style={{ color: '#fb923c' }}>{step.filePath}</span> na branch da história.
+            {isSpec
+              ? 'Revise a especificacao. Apos aprovar, a squad vai executar com base neste SDD.'
+              : <>O codigo sera commitado em <span style={{ color: '#fb923c' }}>{step.filePath}</span> na branch da historia.</>
+            }
           </div>
           <button
             onClick={onCancel}
@@ -483,20 +491,22 @@ function CodeApprovalModal({
             onMouseEnter={(e) => { e.currentTarget.style.color = '#f87171'; e.currentTarget.style.borderColor = '#7f1d1d'; }}
             onMouseLeave={(e) => { e.currentTarget.style.color = '#4b5563'; e.currentTarget.style.borderColor = '#2a1050'; }}
           >
-            CANCELAR
+            {isSpec ? 'REJEITAR SDD' : 'CANCELAR'}
           </button>
           <button
             onClick={onConfirm}
             style={{
               fontFamily: 'monospace', fontSize: '8px', letterSpacing: '0.12em',
-              background: 'rgba(251,146,60,.2)', border: '1px solid rgba(251,146,60,.6)',
-              color: '#fb923c', borderRadius: 6, padding: '9px 22px', cursor: 'pointer',
+              background: isSpec ? 'rgba(124,58,237,.2)' : 'rgba(251,146,60,.2)',
+              border: `1px solid ${isSpec ? 'rgba(124,58,237,.6)' : 'rgba(251,146,60,.6)'}`,
+              color: isSpec ? '#7c3aed' : '#fb923c',
+              borderRadius: 6, padding: '9px 22px', cursor: 'pointer',
               flexShrink: 0,
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(251,146,60,.35)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(251,146,60,.2)'; }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = isSpec ? 'rgba(124,58,237,.35)' : 'rgba(251,146,60,.35)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = isSpec ? 'rgba(124,58,237,.2)' : 'rgba(251,146,60,.2)'; }}
           >
-            CONFIRMAR COMMIT 🐙
+            {isSpec ? 'APROVAR SDD' : 'CONFIRMAR COMMIT 🐙'}
           </button>
         </div>
       </div>
