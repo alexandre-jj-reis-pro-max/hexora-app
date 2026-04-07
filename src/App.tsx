@@ -743,108 +743,111 @@ export default function App() {
 
         addLog({ text: `${deliveryStep.role}: ${filePlan.length} arquivo(s) planejado(s)`, tag: { label: 'task', type: 'task' } });
 
-        // ── Pass 2: Generate each file ──────────────────────────────────
-        const generatedFiles: { path: string; code: string }[] = [];
-        let deliveryFailed = false;
+        // ── Pass 2: Generate ALL files first ─────────────────────────────
+        const generatedFiles: { path: string; code: string; lang: string }[] = [];
 
         for (let fi = 0; fi < filePlan.length; fi++) {
           const fp = filePlan[fi];
-          showBubble(agentId, `[${fi + 1}/${filePlan.length}] ${fp.path.split('/').pop()}...`, false);
+          showBubble(agentId, `Gerando [${fi + 1}/${filePlan.length}] ${fp.path.split('/').pop()}...`, false);
 
-          // Build context from previously generated files
           const prevFilesCtx = generatedFiles.length > 0
             ? generatedFiles.map((g) => `=== ${g.path} ===\n\`\`\`\n${g.code}\n\`\`\``).join('\n\n')
             : '';
 
-          // Read existing version of this file from repo
           let existingFileCtx = '';
           try {
             const existing = await fetchFileContent(githubToken, activeWs.githubRepo, fp.path, baseBranch);
             if (existing.trim()) {
-              existingFileCtx = `\n\n=== CODIGO EXISTENTE EM ${fp.path} (MODIFIQUE/ESTENDA, NAO SUBSTITUA) ===\n\`\`\`\n${existing}\n\`\`\`\n=== FIM ===`;
+              existingFileCtx = `\n\n=== CODIGO EXISTENTE EM ${fp.path} ===\n\`\`\`\n${existing}\n\`\`\`\n=== FIM ===`;
             }
           } catch { /* file doesn't exist */ }
 
-          const fileCtx = [combinedCtx, prevFilesCtx ? `Arquivos ja gerados neste projeto:\n${prevFilesCtx}` : '', existingFileCtx].filter(Boolean).join('\n\n');
-
-          const fileStory = `${story}\n\nArquivo a gerar: ${fp.path}\nDescricao: ${fp.description}`;
+          const fileCtx = [combinedCtx, prevFilesCtx ? `Arquivos ja gerados:\n${prevFilesCtx}` : '', existingFileCtx].filter(Boolean).join('\n\n');
 
           const { text: fileCode } = await callAgentLLM({
             agentId, agentRole: deliveryStep.role, modelId, apiKey,
-            story: fileStory, previousSteps: prevResults,
+            story: `${story}\n\nArquivo: ${fp.path}\nDescricao: ${fp.description}`,
+            previousSteps: prevResults,
             workspaceContext: fileCtx || undefined, codeGen: true,
           });
 
           const blocks = extractCodeBlocks(fileCode);
-          let selectedBlock = blocks[0];
-
-          // If LLM didn't wrap code in markdown blocks, treat entire output as code
-          if (!selectedBlock && fileCode.trim()) {
-            selectedBlock = { lang: fp.path.split('.').pop() || 'txt', code: fileCode.trim() };
+          let block = blocks[0];
+          if (!block && fileCode.trim()) {
+            block = { lang: fp.path.split('.').pop() || 'txt', code: fileCode.trim() };
           }
-          if (!selectedBlock) {
-            addLog({ text: `${deliveryStep.role}: ${fp.path} — LLM nao gerou codigo, pulando`, tag: { label: 'alert', type: 'alert' } });
+          if (!block) {
+            addLog({ text: `${deliveryStep.role}: ${fp.path} — sem codigo, pulando`, tag: { label: 'alert', type: 'alert' } });
             continue;
           }
 
-          // Avoid path conflicts
           let filePath = fp.path;
           if (committedPaths.has(filePath)) {
             const ext = filePath.split('.').pop() || 'txt';
-            const base = filePath.replace(/\.[^.]+$/, '');
-            filePath = `${base}_${agentId}.${ext}`;
+            filePath = `${filePath.replace(/\.[^.]+$/, '')}_${agentId}.${ext}`;
           }
 
-          generatedFiles.push({ path: filePath, code: selectedBlock.code });
-
-          // Show approval for each file
-          window._setAgentWorking?.(agentId, false);
-          clearBubble(agentId);
-          showBubble(agentId, `Aprovar ${filePath.split('/').pop()}?`, false);
-
-          // Show only the extracted code in approval modal, not raw LLM markdown
-          const codeForApproval = '```' + selectedBlock.lang + '\n' + selectedBlock.code + '\n```';
-          updateStep(flowId, deliveryStepId, { status: 'approval', code: codeForApproval, filePath });
-          const approved = await waitForApproval();
-          clearBubble(agentId);
-
-          if (approved) {
-            showBubble(agentId, 'Commitando...', false);
-            try {
-              if (!branchCtx) {
-                branchCtx = await prepareBranch(
-                  githubToken, activeWs.githubRepo, story, activeWs.githubBaseBranch ?? 'main'
-                );
-              }
-              await commitToBranch(branchCtx, filePath, selectedBlock.code, deliveryStep.role);
-              committedPaths.add(filePath);
-              addLog({ text: `${deliveryStep.role}: ${filePath} commitado [${fi + 1}/${filePlan.length}]`, tag: { label: 'deploy', type: 'deploy' } });
-            } catch (err) {
-              const msg = (err as Error).message ?? String(err);
-              addLog({ text: `GitHub commit falhou: ${msg.slice(0, 70)}. Delivery interrompido.`, tag: { label: 'alert', type: 'alert' } });
-              updateStep(flowId, deliveryStepId, { status: 'error', result: msg.slice(0, 80) });
-              clearBubble(agentId);
-              backDesk(agentId);
-              deliveryFailed = true;
-              break;
-            }
-            clearBubble(agentId);
-            window._setAgentWorking?.(agentId, true);
-          } else {
-            addLog({ text: `${deliveryStep.role}: ${filePath} pulado pelo usuario`, tag: { label: 'agent', type: 'agent' } });
-          }
+          generatedFiles.push({ path: filePath, code: block.code, lang: block.lang });
         }
 
         window._setAgentWorking?.(agentId, false);
 
-        if (deliveryFailed) break; // Stop entire delivery
+        if (generatedFiles.length === 0) {
+          updateStep(flowId, deliveryStepId, { status: 'error', result: 'Nenhum arquivo gerado' });
+          clearBubble(agentId);
+          backDesk(agentId);
+          continue;
+        }
+
+        // ── Single approval for ALL files from this agent ───────────────
+        clearBubble(agentId);
+        showBubble(agentId, `${generatedFiles.length} arquivo(s) prontos`, false);
+
+        // Build combined code view for approval
+        const allCodePreview = generatedFiles
+          .map((f) => `// ═══ ${f.path} ═══\n\`\`\`${f.lang}\n${f.code}\n\`\`\``)
+          .join('\n\n');
+        const fileList = generatedFiles.map((f) => f.path).join(', ');
+
+        updateStep(flowId, deliveryStepId, { status: 'approval', code: allCodePreview, filePath: fileList });
+        const approved = await waitForApproval();
+        clearBubble(agentId);
+
+        if (!approved) {
+          updateStep(flowId, deliveryStepId, { status: 'error', result: 'Cancelado pelo usuario' });
+          backDesk(agentId);
+          continue;
+        }
+
+        // ── Commit ALL approved files ───────────────────────────────────
+        showBubble(agentId, 'Commitando...', false);
+        let deliveryFailed = false;
+
+        for (const file of generatedFiles) {
+          try {
+            if (!branchCtx) {
+              branchCtx = await prepareBranch(
+                githubToken, activeWs.githubRepo, story, activeWs.githubBaseBranch ?? 'main'
+              );
+            }
+            await commitToBranch(branchCtx, file.path, file.code, deliveryStep.role);
+            committedPaths.add(file.path);
+            addLog({ text: `${deliveryStep.role}: ${file.path} commitado`, tag: { label: 'deploy', type: 'deploy' } });
+          } catch (err) {
+            const msg = (err as Error).message ?? String(err);
+            addLog({ text: `GitHub commit falhou: ${msg.slice(0, 70)}. Delivery interrompido.`, tag: { label: 'alert', type: 'alert' } });
+            updateStep(flowId, deliveryStepId, { status: 'error', result: msg.slice(0, 80) });
+            clearBubble(agentId);
+            backDesk(agentId);
+            deliveryFailed = true;
+            break;
+          }
+        }
+
+        if (deliveryFailed) break;
 
         const committedByAgent = generatedFiles.filter((g) => committedPaths.has(g.path)).map((g) => g.path);
-        if (committedByAgent.length > 0) {
-          updateStep(flowId, deliveryStepId, { status: 'done', result: committedByAgent.join(', ') });
-        } else {
-          updateStep(flowId, deliveryStepId, { status: 'error', result: 'Nenhum arquivo commitado' });
-        }
+        updateStep(flowId, deliveryStepId, { status: 'done', result: `${committedByAgent.length} arquivo(s): ${committedByAgent.join(', ')}` });
         clearBubble(agentId);
         backDesk(agentId);
         await delay(300);
